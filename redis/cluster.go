@@ -392,8 +392,10 @@ func newClusterState(nodes *clusterNodes, slots []ClusterSlot, origin string) (*
 		var nodes []*clusterNode
 		for i, slotNode := range slot.Nodes {
 			addr := slotNode.Addr
+			// 如果是本机的地址，则用原地址替换。所以对于单机开多进程redis集群的就无效了
+			// 每次都需要重定向，注释掉这句就可以了。
 			if !isLoopbackOrigin && isLoopbackAddr(addr) {
-				addr = origin
+				//addr = origin
 			}
 
 			node, err := c.nodes.GetOrCreate(addr)
@@ -1011,6 +1013,23 @@ func (c *ClusterClient) loadState() (*clusterState, error) {
 		}
 
 		// 发送 cluster slots 命令
+		/*
+		CLUSTER SLOTS命令返回哈希槽和Redis实例映射关系。
+		这个命令对客户端实现集群功能非常有用，
+		使用这个命令可以获得哈希槽与节点（由IP和端口组成）的映射关系，
+		这样，当客户端收到（用户的）调用命令时，
+		可以根据（这个命令）返回的信息将命令发送到正确的Redis实例.
+
+		（嵌套对象）结果数组
+		每一个（节点）信息:
+
+		哈希槽起始编号
+		哈希槽结束编号
+		哈希槽对应master节点，节点使用IP/Port表示
+		master节点的第一个副本
+		第二个副本
+		…直到所有的副本都打印出来
+		*/
 		slots, err := node.Client.ClusterSlots().Result()
 		if err != nil {
 			if firstErr == nil {
