@@ -581,6 +581,9 @@ func NewClusterClient(opt *ClusterOptions) *ClusterClient {
 		nodes:         newClusterNodes(opt),
 		cmdsInfoCache: newCmdsInfoCache(),
 	}
+	// 初始化slot状态信息，通过发送cluster slots命令给server端来获取
+	// 获得slots信息后，就可以在客户端根据key来分片，访问不同的redis server了
+	// 所以说，客户端完全是被动的，所有的分片信息都来自于server端，只需要初始化的时候读取就好了
 	c.state = newClusterStateHolder(c.loadState)
 
 	c.process = c.defaultProcess
@@ -684,7 +687,7 @@ func (c *ClusterClient) cmdSlotAndNode(cmd Cmder) (int, *clusterNode, error) {
 		return slot, node, err
 	}
 
-	node, err := state.slotMasterNode(slot)
+	node, err := state.slotMasterNode(slot) // 通过槽，获得对应的节点
 	return slot, node, err
 }
 
@@ -990,6 +993,7 @@ func (c *ClusterClient) PoolStats() *PoolStats {
 	return &acc
 }
 
+// cluster slots 命令向redis服务端请求
 func (c *ClusterClient) loadState() (*clusterState, error) {
 	addrs, err := c.nodes.Addrs()
 	if err != nil {
@@ -1006,6 +1010,7 @@ func (c *ClusterClient) loadState() (*clusterState, error) {
 			continue
 		}
 
+		// 发送 cluster slots 命令
 		slots, err := node.Client.ClusterSlots().Result()
 		if err != nil {
 			if firstErr == nil {
