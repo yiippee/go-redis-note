@@ -836,6 +836,8 @@ func (c *ClusterClient) defaultProcess(cmd Cmder) error {
 		var addr string
 		moved, ask, addr = internal.IsMovedError(err)
 		if moved || ask {
+			// 有重定向返回信息，则需要重新获取集群分区状态信息
+			// 因为按照正在逻辑，不会存在重定向的，除非redis-cluster slot变动了
 			c.state.LazyReload()
 
 			node, err = c.nodes.GetOrCreate(addr)
