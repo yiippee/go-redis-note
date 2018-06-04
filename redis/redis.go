@@ -25,7 +25,7 @@ func SetLogger(logger *log.Logger) {
 
 type baseClient struct {
 	opt      *Options
-	connPool pool.Pooler
+	connPool pool.Pooler // 连接池
 
 	process           func(Cmder) error
 	processPipeline   func([]Cmder) error
@@ -350,7 +350,7 @@ func NewClient(opt *Options) *Client {
 	c := Client{
 		baseClient: baseClient{
 			opt:      opt,
-			connPool: newConnPool(opt),
+			connPool: newConnPool(opt), // 新建一个连接池
 		},
 	}
 	c.baseClient.init()
