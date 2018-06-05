@@ -1418,10 +1418,15 @@ func (c *ClusterClient) pubSub(channels []string) *PubSub {
 	return &PubSub{
 		opt: opt,
 
+		// 订阅频道时，不会从连接池里面获取一个连接，因为带subpub的连接不能安全重用
 		newConn: func(channels []string) (*pool.Conn, error) {
 			if node == nil {
 				var slot int
 				if len(channels) > 0 {
+					// 选第一个频道作为目标节点
+					// 目前在redis集群中实现发布订阅，发布消息时，是该节点广播至所有的节点中。
+					// 所以随便选取一个节点连订阅是可以的。
+					// 发起一次订阅只能创建一个连接，连接一个节点
 					slot = hashtag.Slot(channels[0])
 				} else {
 					slot = -1

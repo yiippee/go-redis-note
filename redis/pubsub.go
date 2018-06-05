@@ -47,6 +47,8 @@ func (c *PubSub) _conn(channels []string) (*pool.Conn, error) {
 	}
 
 	if c.cn != nil {
+		// 如果之前已经创建了连接，则直接返回，并使用这个连接。
+		// 所以可以多次订阅频道，但使用同一个连接
 		return c.cn, nil
 	}
 
