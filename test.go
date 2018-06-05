@@ -65,7 +65,7 @@ func main() {
 	// 其实这个redis客户端不是这样做的了啊，因为所有的分片信息都是来自于redis服务端了，自身并不需要分片。
 	client := redis.NewClusterClient(&redis.ClusterOptions{
 		//Addrs: []string{":6379", ":6380", ":6381", ":6382", ":6383", ":6384"},
-		Addrs: []string{":6379"},
+		Addrs: []string{":6379"}, // 提供一个种子就可以了啊，后面客户端会自己获取整个集群的状态信息
 	})
 
 	// 在新建一个集群客户端时，客户端会自动向redis集群服务端请求集群状态信息，节点信息等
