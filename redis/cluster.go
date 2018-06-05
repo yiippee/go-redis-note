@@ -314,6 +314,7 @@ func (c *clusterNodes) GetOrCreate(addr string) (*clusterNode, error) {
 		return node, nil
 	}
 
+	// 防止惊群
 	v, err := c.nodeCreateGroup.Do(addr, func() (interface{}, error) {
 		node := newClusterNode(c.opt, addr)
 		return node, node.Test()
@@ -394,8 +395,8 @@ func newClusterState(nodes *clusterNodes, slots []ClusterSlot, origin string) (*
 			addr := slotNode.Addr
 			// 如果是本机的地址，则用原地址替换。所以对于单机开多进程redis集群的就无效了
 			// 每次都需要重定向，注释掉这句就可以了。
-			if !isLoopbackOrigin && isLoopbackAddr(addr) {
-				//addr = origin
+			if !isLoopbackOrigin && useOriginAddr(origin, addr) {
+				addr = origin
 			}
 
 			node, err := c.nodes.GetOrCreate(addr)
@@ -423,6 +424,29 @@ func newClusterState(nodes *clusterNodes, slots []ClusterSlot, origin string) (*
 	})
 
 	return &c, nil
+}
+
+func useOriginAddr(originAddr, nodeAddr string) bool {
+	nodeHost, nodePort, err := net.SplitHostPort(nodeAddr)
+	if err != nil {
+		return false
+	}
+
+	nodeIP := net.ParseIP(nodeHost)
+	if nodeIP == nil {
+		return false
+	}
+
+	if !nodeIP.IsLoopback() {
+		return false
+	}
+
+	_, originPort, err := net.SplitHostPort(originAddr)
+	if err != nil {
+		return false
+	}
+
+	return nodePort == originPort
 }
 
 func (c *clusterState) slotMasterNode(slot int) (*clusterNode, error) {
@@ -837,7 +861,7 @@ func (c *ClusterClient) defaultProcess(cmd Cmder) error {
 		moved, ask, addr = internal.IsMovedError(err)
 		if moved || ask {
 			// 有重定向返回信息，则需要重新获取集群分区状态信息
-			// 因为按照正在逻辑，不会存在重定向的，除非redis-cluster slot变动了
+			// 因为按照正常逻辑，不会存在重定向的，除非redis-cluster slot变动了
 			c.state.LazyReload()
 
 			node, err = c.nodes.GetOrCreate(addr)
@@ -1005,8 +1029,23 @@ func (c *ClusterClient) loadState() (*clusterState, error) {
 	}
 
 	var firstErr error
+	/* 对于用户注册的每一个ip+port,初始化的时候都会
+	   按照配置的地址建立一个集群节点，建立节点过程中会发起 cluster info命令来测试
+cluster_state:ok ok状态表示集群可以正常接受查询请求
+cluster_slots_assigned:16384 已分配到集群节点的哈希槽数量
+cluster_slots_ok:16384  哈希槽状态不是FAIL 和 PFAIL 的数量.
+cluster_slots_pfail:0 哈希槽状态是 PFAIL的数量
+cluster_slots_fail:0 哈希槽状态是 PFAIL的数量
+cluster_known_nodes:6 集群中节点数量，包括处于握手状态还没有成为集群正式成员的节点.
+cluster_size:3 至少包含一个哈希槽且能够提供服务的master节点数量
+cluster_current_epoch:6 集群本地Current Epoch变量的值。这个值在节点故障转移过程时有用，它总是递增和唯一的
+cluster_my_epoch:2 当前正在使用的节点的Config Epoch值. 这个是关联在本节点的版本值.
+cluster_stats_messages_sent:1483972 通过node-to-node二进制总线发送的消息数量.
+cluster_stats_messages_received:1483968 通过node-to-node二进制总线接收的消息数量.
+	*/
+
 	for _, addr := range addrs {
-		node, err := c.nodes.GetOrCreate(addr)
+		node, err := c.nodes.GetOrCreate(addr) // 获取或者创建一个集群节点
 		if err != nil {
 			if firstErr == nil {
 				firstErr = err
@@ -1040,6 +1079,7 @@ func (c *ClusterClient) loadState() (*clusterState, error) {
 			continue
 		}
 
+		// 如果已经获得了集群信息就直接返回了
 		return newClusterState(c.nodes, slots, node.Client.opt.Addr)
 	}
 

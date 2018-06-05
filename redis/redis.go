@@ -138,6 +138,7 @@ func (c *baseClient) defaultProcess(cmd Cmder) error {
 		}
 
 		cn, _, err := c.getConn() // 从连接池里面获取一个连接
+		fmt.Println(cn.RemoteAddr())
 		if err != nil {
 			cmd.setErr(err)
 			if internal.IsRetryableError(err, true) {
