@@ -79,6 +79,7 @@ func NewFailoverClient(failoverOpt *FailoverOptions) *Client {
 	c := Client{
 		baseClient: baseClient{
 			opt:      opt,
+			// 配置 sentinel 模式下的连接地址相关信息
 			connPool: failover.Pool(),
 
 			onClose: func() error {
@@ -162,6 +163,7 @@ func (d *sentinelFailover) Pool() *pool.ConnPool {
 }
 
 func (d *sentinelFailover) dial() (net.Conn, error) {
+	// 获取主节点的ip和端口
 	addr, err := d.MasterAddr()
 	if err != nil {
 		return nil, err
@@ -178,6 +180,7 @@ func (d *sentinelFailover) MasterAddr() (string, error) {
 		return "", err
 	}
 
+	// 如果主机ip有变化则，则需要切换新的主机ip
 	if d._masterAddr != addr {
 		d.switchMaster(addr)
 	}
@@ -188,6 +191,8 @@ func (d *sentinelFailover) MasterAddr() (string, error) {
 func (d *sentinelFailover) masterAddr() (string, error) {
 	// Try last working sentinel.
 	if d.sentinel != nil {
+		// 给sentinel发送指令 sentinel get-master-addr-by-name mymaster
+		// 来获得主机名称 mymaster 的ip和port
 		addr, err := d.sentinel.GetMasterAddrByName(d.masterName).Result()
 		if err == nil {
 			addr := net.JoinHostPort(addr[0], addr[1])
