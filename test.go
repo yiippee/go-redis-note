@@ -37,6 +37,7 @@ func client_subscribe(client *redis.ClusterClient) {
 	// 返回值 sub 类似于一个处于订阅模式下的客户端
 	// 处于订阅模式下的客户端，只能向Redis服务器发送PING、SUBSCRIBE、UNSUBSCRIBE、PSUBSCRIBE、PUNSUBSCRIBE命令
 	sub := client.Subscribe("mychannel1", "mychannel2")
+	// 可多次订阅某一个频道，但使用的是同一个连接
 	sub.Subscribe("mychannel3") // 订阅某一个频道
 	sub.Unsubscribe("mychannel2") // 退订某一个频道
 	for {
@@ -44,11 +45,36 @@ func client_subscribe(client *redis.ClusterClient) {
 		if err != nil {
 			fmt.Println(err)
 		}
-		fmt.Println("receive msg:", msg)
+		if m, ok := msg.(*redis.Message); ok {
+			fmt.Println(m.Channel, m.Pattern, m.Payload)
+		}
+		//fmt.Println(reflect.TypeOf(msg))
+		//fmt.Println("receive msg:", msg)
 	}
 }
 
 func main() {
+	// 测试sentinel哨兵相关功能。就是具有主从模式，但不是集群模式下的redis服务器
+	// 支持所有的操作命令，与单机版一样，主要是增加了系统的 高可用性。
+	// 返回的也是一个普通的客户端,不同之处在于，该客户端对应的ip和port会根据具体的情况切换，比如主机挂了，从机备份作为主机的情况。
+	senti := redis.NewFailoverClient(&redis.FailoverOptions{
+		MasterName:    "mymaster", // 主机的名字
+		// 连接的其实是一个运行在sentinel模式下的redis服务器，也就是一个监视器
+		// 该模式下的服务器会自动执行故障转移，主从切换等操作。
+		// 具有高可用性。与集群还是不一样的，集群更关注节点的扩展，当然集群也自带故障转移功能。
+		SentinelAddrs: []string{":" + "26379"}, // 提供监视器的一个种子地址就可以了，会自动检测出其他的监视器
+	})
+
+	// set get等单机redis支持的命令，全都支持。因为对于客户端来说，得到的是一个高可用的redis服务。
+	err := senti.Set("foo", "master", 0).Err()
+	if err != nil {
+		fmt.Println(err)
+	}
+
+
+	re := senti.Get("foo")
+	fmt.Println(re.Result())
+
 	//g_redis := redis.NewClient(&redis.Options{
 	//	Addr:        "127.0.0.1" + ":" + strconv.Itoa(6379),
 	//	Password:    "",
@@ -96,9 +122,13 @@ func main() {
 
 	go client_subscribe(client)
 	time.Sleep(1 * time.Second)
-	fmt.Println("send msg:")
+	//fmt.Println("send msg:")
+	// 发布与普通指令一样，也是hash到具体的节点，从连接池获取conn并发送。
+	// redis集群会广播消息至其他节点，所以如果订阅者在其他节点也是可以收到消息的
 	client.Publish("mychannel1", "hello")
 	client.Publish("mychannel2", "world.")
+	// 对于没有订阅的频道，redis服务端会直接返回，不会存储数据，也不会有其他的影响。
+	// 所以必须要先订阅，发布的时候才有意义，否则redis服务端都找不到订阅客户端。
 	client.Publish("mychannel3", "lizhanbin")
 
 	select {}

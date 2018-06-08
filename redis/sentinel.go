@@ -65,7 +65,7 @@ func (opt *FailoverOptions) options() *Options {
 // NewFailoverClient returns a Redis client that uses Redis Sentinel
 // for automatic failover. It's safe for concurrent use by multiple
 // goroutines.
-func NewFailoverClient(failoverOpt *FailoverOptions) *Client {
+func NewFailoverClient(failoverOpt *FailoverOptions) *Client { // 返回的也是一个普通的客户端
 	opt := failoverOpt.options()
 	opt.init()
 

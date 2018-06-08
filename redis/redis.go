@@ -134,6 +134,7 @@ func (c *baseClient) Process(cmd Cmder) error {
 func (c *baseClient) defaultProcess(cmd Cmder) error {
 	for attempt := 0; attempt <= c.opt.MaxRetries; attempt++ {
 		if attempt > 0 {
+			// 等待一个 退避算法 算出的时间
 			time.Sleep(c.retryBackoff(attempt))
 		}
 
@@ -162,6 +163,7 @@ func (c *baseClient) defaultProcess(cmd Cmder) error {
 		err = cmd.readReply(cn)
 		c.releaseConn(cn, err)
 		if err != nil && internal.IsRetryableError(err, cmd.readTimeout() == nil) {
+			// 如果是一些诸如：loading，连接数超了，集群正在迁移 等可以重新再试的错误，则继续试一次。
 			continue
 		}
 
